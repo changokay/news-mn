@@ -118,7 +118,7 @@ export default function Page() {
                 )}
               </div>
 
-              <h2 className="font-semibold text-gray-900 mb-3 leading-snug">
+              <h2 className="font-semibold text-gray-900 mb-2 leading-snug">
                 <a
                   href={item.link}
                   target="_blank"
@@ -128,6 +128,20 @@ export default function Page() {
                   {item.title}
                 </a>
               </h2>
+
+              {item.summary && (
+                <p className="text-sm text-gray-600 leading-relaxed mb-2">{item.summary}</p>
+              )}
+
+              {item.keywords && item.keywords.length > 0 && (
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {item.keywords.map((kw) => (
+                    <span key={kw} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-100">
+                      #{kw}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               <div className="bg-amber-50 border-l-4 border-amber-400 rounded-r-lg p-3">
                 <div className="flex items-center gap-1 text-amber-700 text-xs font-bold mb-1">

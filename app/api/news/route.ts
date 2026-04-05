@@ -23,6 +23,8 @@ export interface NewsItem {
   link: string;
   pubDate: string;
   source: string;
+  summary: string;
+  keywords: string[];
   businessInsight: string;
 }
 
@@ -56,7 +58,13 @@ export async function GET() {
 
   // Groq으로 사업적 분석
   const listText = rawNews.map((item, i) => `${i + 1}. ${item.title}`).join('\n');
-  let insights: string[] = rawNews.map(() => '분석 불가');
+
+  type AnalysisItem = { summary: string; keywords: string[]; insight: string };
+  let analyses: AnalysisItem[] = rawNews.map(() => ({
+    summary: '요약 불가',
+    keywords: [],
+    insight: '분석 불가',
+  }));
 
   try {
     const completion = await groq.chat.completions.create({
@@ -69,11 +77,14 @@ export async function GET() {
         {
           role: 'user',
           content:
-            `아래 뉴스들을 한국 사업가 관점에서 분석해주세요.\n` +
-            `각 항목마다 2~3문장으로: 시장 기회/리스크, 관련 산업, 한국 기업 시사점을 포함하세요.\n\n` +
+            `아래 뉴스들을 한국 사업가 관점에서 분석해주세요.\n\n` +
+            `각 항목마다 다음 3가지를 작성하세요:\n` +
+            `- summary: 뉴스 내용을 2문장으로 요약 (핵심 사실 중심)\n` +
+            `- keywords: 핵심 키워드 3~5개 (짧은 단어/구)\n` +
+            `- insight: 한국 사업가 관점 사업적 의미 2~3문장 (시장 기회/리스크, 시사점)\n\n` +
             `${listText}\n\n` +
             `반드시 아래 JSON 형식만 출력하세요 (다른 텍스트 없이):\n` +
-            `{"insights":["1번 분석","2번 분석","3번 분석",...]}`,
+            `{"items":[{"summary":"...","keywords":["키워드1","키워드2"],"insight":"..."},...]}`
         },
       ],
       temperature: 0.7,
@@ -82,25 +93,28 @@ export async function GET() {
 
     const text = completion.choices[0]?.message?.content?.trim() ?? '';
     const parsed = JSON.parse(text);
-    if (Array.isArray(parsed.insights)) {
-      insights = parsed.insights.map((item: unknown) => {
-        if (typeof item === 'string') return item;
-        if (typeof item === 'object' && item !== null) {
-          // 객체로 왔을 경우 값들을 합쳐서 문자열로 변환
-          return Object.values(item as Record<string, unknown>).join(' ');
-        }
-        return String(item);
+    if (Array.isArray(parsed.items)) {
+      analyses = parsed.items.map((item: unknown) => {
+        if (typeof item !== 'object' || item === null) return { summary: '', keywords: [], insight: String(item) };
+        const obj = item as Record<string, unknown>;
+        return {
+          summary: typeof obj.summary === 'string' ? obj.summary : '',
+          keywords: Array.isArray(obj.keywords) ? obj.keywords.map(String) : [],
+          insight: typeof obj.insight === 'string' ? obj.insight : '',
+        };
       });
     }
   } catch (e) {
     console.error('Groq 오류:', e);
-    insights = rawNews.map(() => `분석 오류: ${String(e)}`);
+    analyses = rawNews.map(() => ({ summary: '', keywords: [], insight: `분석 오류: ${String(e)}` }));
   }
 
   const finalResult = {
     data: rawNews.map((item, i) => ({
       ...item,
-      businessInsight: insights[i] ?? '분석 중...',
+      summary: analyses[i]?.summary ?? '',
+      keywords: analyses[i]?.keywords ?? [],
+      businessInsight: analyses[i]?.insight ?? '분석 중...',
     })),
     updatedAt: new Date().toISOString(),
   };
